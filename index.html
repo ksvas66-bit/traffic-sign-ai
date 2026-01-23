@@ -1,51 +1,11 @@
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="UTF-8">
-  <title>Traffic Sign Recognition</title>
-
-  <!-- TensorFlow.js -->
-  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.21.0"></script>
-
-  <!-- Teachable Machine Image -->
-  <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@0.8/dist/teachablemachine-image.min.js"></script>
-
-  <style>
-    body {
-      font-family: Arial, sans-serif;
-      text-align: center;
-      background-color: #f2f2f2;
-    }
-    canvas {
-      border: 3px solid black;
-      margin-top: 10px;
-    }
-    button {
-      font-size: 18px;
-      padding: 10px 20px;
-      margin-top: 10px;
-    }
-    h2 {
-      color: green;
-    }
-    #label {
-      font-size: 22px;
-      font-weight: bold;
-      margin-top: 10px;
-    }
-  </style>
-</head>
-
-<body>
-  <h2>Traffic Sign Recognition</h2>
-  <button onclick="init()">START CAMERA</button>
-  <div id="webcam-container"></div>
-  <div id="label">Waiting...</div>
-
 <script>
   const URL = "https://teachablemachine.withgoogle.com/models/DXF2w_wXO/";
 
   let model, webcam;
+  let lastPrediction = "";
+  let stableCount = 0;
+  const REQUIRED_FRAMES = 8;   // ~0.5 second
+  const CONFIDENCE = 0.8;      // 80%
 
   async function init() {
     const modelURL = URL + "model.json";
@@ -53,13 +13,8 @@
 
     model = await tmImage.load(modelURL, metadataURL);
 
-    // 🔥 FORCE REAR CAMERA
     webcam = new tmImage.Webcam(224, 224, false);
-
-    await webcam.setup({
-      facingMode: { exact: "environment" } // rear camera
-    });
-
+    await webcam.setup({ facingMode: "environment" });
     await webcam.play();
 
     document.getElementById("webcam-container").appendChild(webcam.canvas);
@@ -76,10 +31,20 @@
     const prediction = await model.predict(webcam.canvas);
     prediction.sort((a, b) => b.probability - a.probability);
 
-    document.getElementById("label").innerText =
-      prediction[0].className + " : " +
-      (prediction[0].probability * 100).toFixed(1) + "%";
+    const top = prediction[0];
+
+    if (top.probability > CONFIDENCE) {
+      if (top.className === lastPrediction) {
+        stableCount++;
+      } else {
+        lastPrediction = top.className;
+        stableCount = 1;
+      }
+
+      if (stableCount >= REQUIRED_FRAMES) {
+        document.getElementById("label").innerText =
+          lastPrediction + " ✔";
+      }
+    }
   }
 </script>
-</body>
-</html>
