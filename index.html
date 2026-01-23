@@ -14,19 +14,28 @@
     body {
       font-family: Arial, sans-serif;
       text-align: center;
-      background: #f2f2f2;
+      background-color: #f2f2f2;
     }
+
     canvas {
       border: 3px solid black;
       margin-top: 10px;
     }
+
     button {
       font-size: 18px;
       padding: 10px 20px;
       margin-top: 10px;
     }
+
     h2 {
       color: green;
+    }
+
+    #label {
+      font-size: 22px;
+      margin-top: 10px;
+      font-weight: bold;
     }
   </style>
 </head>
@@ -35,42 +44,47 @@
   <h2>Traffic Sign Recognition</h2>
   <button onclick="init()">START CAMERA</button>
   <div id="webcam-container"></div>
-  <h3 id="label">Waiting...</h3>
+  <div id="label">Waiting...</div>
 
-<script>
-  const URL = "https://teachablemachine.withgoogle.com/models/DXF2w_wXO/";
+  <script>
+    // Replace this with your Teachable Machine model URL
+    const URL = "https://teachablemachine.withgoogle.com/models/DXF2w_wXO/";
 
-  let model, webcam, maxPredictions;
+    let model, webcam, maxPredictions;
 
-  async function init() {
-    const modelURL = URL + "model.json";
-    const metadataURL = URL + "metadata.json";
+    async function init() {
+      const modelURL = URL + "model.json";
+      const metadataURL = URL + "metadata.json";
 
-    model = await tmImage.load(modelURL, metadataURL);
-    maxPredictions = model.getTotalClasses();
+      // Load the model
+      model = await tmImage.load(modelURL, metadataURL);
+      maxPredictions = model.getTotalClasses();
 
-    webcam = new tmImage.Webcam(224, 224, true);
-    await webcam.setup();   // this asks for camera permission
-    await webcam.play();
+      // Set up webcam
+      // Third parameter = false -> rear camera
+      webcam = new tmImage.Webcam(224, 224, false);
+      await webcam.setup();   // requests camera permission
+      await webcam.play();
 
-    document.getElementById("webcam-container").appendChild(webcam.canvas);
-    window.requestAnimationFrame(loop);
-  }
+      document.getElementById("webcam-container").appendChild(webcam.canvas);
 
-  async function loop() {
-    webcam.update();
-    await predict();
-    window.requestAnimationFrame(loop);
-  }
+      window.requestAnimationFrame(loop);
+    }
 
-  async function predict() {
-    const prediction = await model.predict(webcam.canvas);
-    prediction.sort((a, b) => b.probability - a.probability);
-    document.getElementById("label").innerText =
-      prediction[0].className + " : " +
-      (prediction[0].probability * 100).toFixed(1) + "%";
-  }
-</script>
+    async function loop() {
+      webcam.update(); // update the webcam frame
+      await predict();
+      window.requestAnimationFrame(loop);
+    }
+
+    async function predict() {
+      const prediction = await model.predict(webcam.canvas);
+      prediction.sort((a, b) => b.probability - a.probability);
+
+      document.getElementById("label").innerText =
+        prediction[0].className + " : " +
+        (prediction[0].probability * 100).toFixed(1) + "%";
+    }
+  </script>
 </body>
 </html>
-
