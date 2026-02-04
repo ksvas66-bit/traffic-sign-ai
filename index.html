@@ -1,47 +1,85 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <meta charset="UTF-8">
-  <title>Traffic Sign Recognition</title>
+<meta charset="UTF-8">
+<title>Traffic Sign Recognition</title>
 
-  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.21.0"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@0.8/dist/teachablemachine-image.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.21.0"></script>
+<script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@0.8/dist/teachablemachine-image.min.js"></script>
 
-  <style>
-    body { font-family: Arial; text-align: center; background: #f2f2f2; }
-    canvas { border: 3px solid black; margin-top: 10px; }
-    button { font-size: 18px; padding: 10px 20px; margin-top: 10px; }
-    h2 { color: green; }
-    #label { font-size: 22px; font-weight: bold; margin-top: 10px; }
-  </style>
+<style>
+body {
+  font-family: Arial;
+  text-align: center;
+  background: #f2f2f2;
+}
+
+canvas {
+  border: 3px solid black;
+  margin-top: 10px;
+}
+
+button {
+  font-size: 20px;
+  padding: 12px 24px;
+  margin-top: 15px;
+}
+
+h2 {
+  color: green;
+}
+
+#label {
+  font-size: 24px;
+  font-weight: bold;
+  margin-top: 15px;
+}
+</style>
 </head>
 
 <body>
-  <h2>Traffic Sign Recognition</h2>
-  <button onclick="init()">START CAMERA</button>
-  <div id="webcam-container"></div>
-  <div id="label">Waiting...</div>
+
+<h2>AI Traffic Sign Robot</h2>
+
+<button onclick="init()">START CAMERA</button>
+
+<div id="webcam-container"></div>
+<div id="label">Waiting for camera...</div>
 
 <script>
+
 const URL = "https://teachablemachine.withgoogle.com/models/DXF2w_wXO/";
+
+// ⭐ SETTINGS (You can adjust later)
+const CONFIDENCE = 0.80;   // Ignore weak predictions
+const REQUIRED = 6;       // Frames needed for stable detection
 
 let model, webcam;
 let lastLabel = "";
 let count = 0;
-const CONFIDENCE = 0.8;
-const REQUIRED = 8;
+let lastCommandSent = "";
 
 async function init() {
+
+  document.getElementById("label").innerText = "Loading AI model...";
+
   const modelURL = URL + "model.json";
   const metadataURL = URL + "metadata.json";
 
   model = await tmImage.load(modelURL, metadataURL);
 
   webcam = new tmImage.Webcam(224, 224, false);
-  await webcam.setup({ facingMode: "environment" });
+
+  await webcam.setup({
+    facingMode: "environment"
+  });
+
   await webcam.play();
 
   document.getElementById("webcam-container").appendChild(webcam.canvas);
+
+  document.getElementById("label").innerText = "Camera started";
+
   window.requestAnimationFrame(loop);
 }
 
@@ -52,25 +90,66 @@ async function loop() {
 }
 
 async function predict() {
-  const preds = await model.predict(webcam.canvas);
-  preds.sort((a, b) => b.probability - a.probability);
 
-  const top = preds[0];
+  const predictions = await model.predict(webcam.canvas);
 
-  if (top.probability > CONFIDENCE) {
-    if (top.className === lastLabel) {
-      count++;
-    } else {
-      lastLabel = top.className;
-      count = 1;
-    }
+  predictions.sort((a, b) => b.probability - a.probability);
 
-    if (count >= REQUIRED) {
-      document.getElementById("label").innerText =
-        lastLabel + " (" + Math.round(top.probability * 100) + "%)";
-    }
+  const top = predictions[0];
+
+  // ⭐ Ignore low confidence
+  if (top.probability < CONFIDENCE) return;
+
+  // ⭐ Stability check
+  if (top.className === lastLabel) {
+    count++;
+  } else {
+    lastLabel = top.className;
+    count = 1;
   }
+
+  if (count < REQUIRED) return;
+
+  // ⭐ Display result
+  document.getElementById("label").innerText =
+    lastLabel + " (" + Math.round(top.probability * 100) + "%)";
+
+
+  // ⭐ Convert label → robot command
+  let cmd = "";
+
+  if (lastLabel.toLowerCase().includes("left"))
+      cmd = "L";
+
+  else if (lastLabel.toLowerCase().includes("right"))
+      cmd = "R";
+
+  else if (lastLabel.toLowerCase().includes("stop"))
+      cmd = "S";
+
+  else if (lastLabel.toLowerCase().includes("u"))
+      cmd = "U";
+
+  else if (lastLabel.toLowerCase().includes("round"))
+      cmd = "A";
+
+  else if (lastLabel.toLowerCase().includes("none"))
+      cmd = "F";   // move forward if nothing detected
+
+
+  // ⭐ Prevent sending SAME command repeatedly
+  if (cmd === lastCommandSent) return;
+
+  lastCommandSent = cmd;
+
+
+  // ⭐ SEND TO MIT APP
+  if (window.AppInventor) {
+      window.AppInventor.setWebViewString(cmd);
+  }
+
 }
+
 </script>
 
 </body>
