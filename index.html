@@ -8,145 +8,160 @@
 <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@0.8/dist/teachablemachine-image.min.js"></script>
 
 <style>
-body {
-  font-family: Arial;
-  text-align: center;
-  background: #f2f2f2;
+body{
+  text-align:center;
+  font-family:Arial;
+  background:#f2f2f2;
 }
 
-canvas {
-  border: 3px solid black;
-  margin-top: 10px;
+canvas{
+  border:3px solid black;
+  margin-top:10px;
 }
 
-button {
-  font-size: 20px;
-  padding: 12px 24px;
-  margin-top: 15px;
+button{
+  font-size:20px;
+  padding:12px;
+  margin-top:10px;
 }
 
-h2 {
-  color: green;
-}
-
-#label {
-  font-size: 24px;
-  font-weight: bold;
-  margin-top: 15px;
+#label{
+  font-size:26px;
+  font-weight:bold;
+  color:green;
+  margin-top:15px;
 }
 </style>
 </head>
 
 <body>
 
-<h2>AI Traffic Sign Robot</h2>
+<h2>Traffic Sign Recognition Robot</h2>
 
 <button onclick="init()">START CAMERA</button>
 
 <div id="webcam-container"></div>
-<div id="label">Waiting for camera...</div>
+<div id="label">Waiting for sign...</div>
 
 <script>
 
 const URL = "https://teachablemachine.withgoogle.com/models/DXF2w_wXO/";
 
-// ⭐ SETTINGS (You can adjust later)
-const CONFIDENCE = 0.80;   // Ignore weak predictions
-const REQUIRED = 6;       // Frames needed for stable detection
+let model, webcam, maxPredictions;
 
-let model, webcam;
+const CONFIDENCE = 0.80;   // ignore weak predictions
+const REQUIRED = 6;        // stability frames
+
 let lastLabel = "";
-let count = 0;
-let lastCommandSent = "";
+let stableCount = 0;
+let lastSent = "";        // prevents command spam
+
+//----------------------------------------
 
 async function init() {
 
-  document.getElementById("label").innerText = "Loading AI model...";
+const modelURL = URL + "model.json";
+const metadataURL = URL + "metadata.json";
 
-  const modelURL = URL + "model.json";
-  const metadataURL = URL + "metadata.json";
+model = await tmImage.load(modelURL, metadataURL);
+maxPredictions = model.getTotalClasses();
 
-  model = await tmImage.load(modelURL, metadataURL);
+webcam = new tmImage.Webcam(224,224,true);
+await webcam.setup({ facingMode:"environment" });
+await webcam.play();
 
-  webcam = new tmImage.Webcam(224, 224, false);
+document.getElementById("webcam-container").innerHTML="";
+document.getElementById("webcam-container").appendChild(webcam.canvas);
 
-  await webcam.setup({
-    facingMode: "environment"
-  });
-
-  await webcam.play();
-
-  document.getElementById("webcam-container").appendChild(webcam.canvas);
-
-  document.getElementById("label").innerText = "Camera started";
-
-  window.requestAnimationFrame(loop);
+window.requestAnimationFrame(loop);
 }
 
-async function loop() {
-  webcam.update();
-  await predict();
-  window.requestAnimationFrame(loop);
+//----------------------------------------
+
+async function loop(){
+webcam.update();
+await predict();
+window.requestAnimationFrame(loop);
 }
 
-async function predict() {
+//----------------------------------------
 
-  const predictions = await model.predict(webcam.canvas);
+async function predict(){
 
-  predictions.sort((a, b) => b.probability - a.probability);
+const prediction = await model.predict(webcam.canvas);
 
-  const top = predictions[0];
+// find highest prediction
+let top = prediction[0];
 
-  // ⭐ Ignore low confidence
-  if (top.probability < CONFIDENCE) return;
+for(let i=1;i<prediction.length;i++){
+    if(prediction[i].probability > top.probability){
+        top = prediction[i];
+    }
+}
 
-  // ⭐ Stability check
-  if (top.className === lastLabel) {
-    count++;
-  } else {
-    lastLabel = top.className;
-    count = 1;
-  }
+// ignore weak confidence
+if(top.probability < CONFIDENCE){
+    stableCount = 0;
+    return;
+}
 
-  if (count < REQUIRED) return;
+let current = top.className.toLowerCase();
 
-  // ⭐ Display result
-  document.getElementById("label").innerText =
-    lastLabel + " (" + Math.round(top.probability * 100) + "%)";
+// stability check
+if(current === lastLabel){
+    stableCount++;
+}else{
+    lastLabel = current;
+    stableCount = 1;
+}
 
+if(stableCount < REQUIRED) return;
 
-  // ⭐ Convert label → robot command
-  let cmd = "";
+// SHOW LABEL
+document.getElementById("label").innerHTML =
+current.toUpperCase() + " (" + Math.round(top.probability*100) + "%)";
 
-  if (lastLabel.toLowerCase().includes("left"))
-      cmd = "L";
+//----------------------------------------
+// COMMAND SECTION (VERY IMPORTANT)
+//----------------------------------------
 
-  else if (lastLabel.toLowerCase().includes("right"))
-      cmd = "R";
+let cmd = "";
 
-  else if (lastLabel.toLowerCase().includes("stop"))
-      cmd = "S";
+if(current === "stop")
+    cmd = "S";
 
-  else if (lastLabel.toLowerCase().includes("u"))
-      cmd = "U";
+else if(current === "left")
+    cmd = "L";
 
-  else if (lastLabel.toLowerCase().includes("round"))
-      cmd = "A";
+else if(current === "right")
+    cmd = "R";
 
-  else if (lastLabel.toLowerCase().includes("none"))
-      cmd = "F";   // move forward if nothing detected
+else if(current === "forward")
+    cmd = "F";
 
+else if(current === "uturn")
+    cmd = "U";
 
-  // ⭐ Prevent sending SAME command repeatedly
-  if (cmd === lastCommandSent) return;
+else if(current === "roundabout")
+    cmd = "A";
 
-  lastCommandSent = cmd;
+else if(current === "none")
+    cmd = "";   // do nothing
 
+//----------------------------------------
+// SEND TO MIT APP INVENTOR
+//----------------------------------------
 
-  // ⭐ SEND TO MIT APP
-  if (window.AppInventor) {
-    window.AppInventor.setWebViewString(lastLabel);
-  }
+if(cmd !== "" && cmd !== lastSent){
+
+    lastSent = cmd;
+
+    if(window.AppInventor){
+        window.AppInventor.setWebViewString(cmd);
+    }
+
+    console.log("Command Sent:", cmd);
+}
 
 }
 
@@ -154,5 +169,3 @@ async function predict() {
 
 </body>
 </html>
-
-
