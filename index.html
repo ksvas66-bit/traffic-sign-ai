@@ -1,174 +1,112 @@
 <!DOCTYPE html>
 <html>
 <head>
-<meta charset="UTF-8">
-<title>Traffic Sign Recognition</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Traffic Sign Robot Control</title>
 
-<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.21.0"></script>
-<script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@0.8/dist/teachablemachine-image.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest"></script>
+<script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@latest"></script>
 
 <style>
 body{
-  text-align:center;
-  font-family:Arial;
-  background:#f2f2f2;
+    text-align:center;
+    font-family:Arial;
 }
-
-canvas{
-  border:3px solid black;
-  margin-top:10px;
+video{
+    border:3px solid black;
+    border-radius:10px;
 }
-
-button{
-  font-size:20px;
-  padding:12px;
-  margin-top:10px;
-}
-
 #label{
-  font-size:26px;
-  font-weight:bold;
-  color:green;
-  margin-top:15px;
+    font-size:30px;
+    font-weight:bold;
+    color:blue;
 }
 </style>
 </head>
 
 <body>
 
-<h2>Traffic Sign Recognition Robot</h2>
+<h2>Traffic Sign Recognition</h2>
 
 <button onclick="init()">START CAMERA</button>
 
+<br><br>
+
 <div id="webcam-container"></div>
-<div id="label">Waiting for sign...</div>
+<div id="label">Prediction: NONE</div>
 
 <script>
 
-const URL = "https://teachablemachine.withgoogle.com/models/DXF2w_wXO/";
+const URL = "PASTE_YOUR_MODEL_LINK_HERE/"; 
+// Example:
+// https://teachablemachine.withgoogle.com/models/xxxxxxx/
 
 let model, webcam, maxPredictions;
-
-const CONFIDENCE = 0.80;   // ignore weak predictions
-const REQUIRED = 6;        // stability frames
-
-let lastLabel = "";
-let stableCount = 0;
-let lastSent = "";        // prevents command spam
-
-//----------------------------------------
+let lastCommand = "";
 
 async function init() {
 
-const modelURL = URL + "model.json";
-const metadataURL = URL + "metadata.json";
+    const modelURL = URL + "model.json";
+    const metadataURL = URL + "metadata.json";
 
-model = await tmImage.load(modelURL, metadataURL);
-maxPredictions = model.getTotalClasses();
+    model = await tmImage.load(modelURL, metadataURL);
+    maxPredictions = model.getTotalClasses();
 
-webcam = new tmImage.Webcam(224,224,false);
-await webcam.setup({ facingMode:"environment" });
-await webcam.play();
+    webcam = new tmImage.Webcam(300, 300, false); 
+    // FALSE = no mirror
 
-document.getElementById("webcam-container").innerHTML="";
-document.getElementById("webcam-container").appendChild(webcam.canvas);
+    await webcam.setup({ facingMode: "environment" }); 
+    await webcam.play();
 
-window.requestAnimationFrame(loop);
+    window.requestAnimationFrame(loop);
+
+    document.getElementById("webcam-container").appendChild(webcam.canvas);
 }
 
-//----------------------------------------
-
-async function loop(){
-webcam.update();
-await predict();
-window.requestAnimationFrame(loop);
+async function loop() {
+    webcam.update();
+    await predict();
+    window.requestAnimationFrame(loop);
 }
 
-//----------------------------------------
+async function predict() {
 
-async function predict(){
+    const prediction = await model.predict(webcam.canvas);
 
-const prediction = await model.predict(webcam.canvas);
+    let highestProb = 0;
+    let detectedClass = "NONE";
 
-// find highest prediction
-let top = prediction[0];
+    for (let i = 0; i < maxPredictions; i++) {
 
-for(let i=1;i<prediction.length;i++){
-    if(prediction[i].probability > top.probability){
-        top = prediction[i];
-    }
-}
-
-// ignore weak confidence
-if(top.probability < CONFIDENCE){
-    stableCount = 0;
-    return;
-}
-
-let current = top.className.toLowerCase();
-
-// stability check
-if(current === lastLabel){
-    stableCount++;
-}else{
-    lastLabel = current;
-    stableCount = 1;
-}
-
-if(stableCount < REQUIRED) return;
-
-// SHOW LABEL
-document.getElementById("label").innerHTML =
-current.toUpperCase() + " (" + Math.round(top.probability*100) + "%)";
-
-//----------------------------------------
-// COMMAND SECTION (VERY IMPORTANT)
-//----------------------------------------
-
-let cmd = "";
-
-if(current === "stop")
-    cmd = "S";
-
-else if(current === "left")
-    cmd = "L";
-
-else if(current === "right")
-    cmd = "R";
-
-else if(current === "forward")
-    cmd = "F";
-
-else if(current === "uturn")
-    cmd = "U";
-
-else if(current === "roundabout")
-    cmd = "A";
-
-else if(current === "none")
-    cmd = "";   // do nothing
-
-//----------------------------------------
-// SEND TO MIT APP INVENTOR
-//----------------------------------------
-
-if(cmd !== "" && cmd !== lastSent){
-
-    lastSent = cmd;
-
-    if(window.AppInventor){
-        window.AppInventor.setWebViewString(cmd);
+        if (prediction[i].probability > highestProb) {
+            highestProb = prediction[i].probability;
+            detectedClass = prediction[i].className;
+        }
     }
 
-    console.log("Command Sent:", cmd);
-}
+    // Confidence filter (VERY IMPORTANT)
+    if(highestProb < 0.85){
+        detectedClass = "NONE";
+    }
 
+    document.getElementById("label").innerHTML =
+        "Prediction: " + detectedClass + 
+        " (" + highestProb.toFixed(2) + ")";
+
+
+    // Send command only if changed
+    if(detectedClass !== lastCommand){
+
+        lastCommand = detectedClass;
+
+        // ***** THIS CALLS YOUR KODULAR APP *****
+        // Kodular WebViewer receives this via "OnConsoleMessage"
+
+        console.log(detectedClass);
+    }
 }
 
 </script>
 
 </body>
 </html>
-
-
-
