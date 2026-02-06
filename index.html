@@ -66,7 +66,7 @@ const metadataURL = URL + "metadata.json";
 model = await tmImage.load(modelURL, metadataURL);
 maxPredictions = model.getTotalClasses();
 
-webcam = new tmImage.Webcam(224,224,true);
+webcam = new tmImage.Webcam(224,224,false);
 await webcam.setup({ facingMode:"environment" });
 await webcam.play();
 
@@ -169,3 +169,4 @@ if(cmd !== "" && cmd !== lastSent){
 
 </body>
 </html>
+
