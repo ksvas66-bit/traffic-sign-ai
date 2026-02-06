@@ -127,25 +127,25 @@ current.toUpperCase() + " (" + Math.round(top.probability*100) + "%)";
 
 let cmd = "";
 
-if(current === "stop")
+if(current === "STOP")
     cmd = "S";
 
-else if(current === "left")
+else if(current === "LEFT")
     cmd = "L";
 
-else if(current === "right")
+else if(current === "RIGHT")
     cmd = "R";
 
-else if(current === "forward")
+else if(current === "FORWARD")
     cmd = "F";
 
-else if(current === "uturn")
+else if(current === "UTURN")
     cmd = "U";
 
-else if(current === "roundabout")
+else if(current === "ROUNDABOUT")
     cmd = "A";
 
-else if(current === "none")
+else if(current === "NONE")
     cmd = "";   // do nothing
 
 //----------------------------------------
@@ -169,4 +169,5 @@ if(cmd !== "" && cmd !== lastSent){
 
 </body>
 </html>
+
 
