@@ -59,7 +59,7 @@ async function init() {
     // ⭐ VERY IMPORTANT LINE
     maxPredictions = model.getTotalClasses();
 
-    webcam = new tmImage.Webcam(224,224,true); // true = remove mirror
+    webcam = new tmImage.Webcam(224,224,false); // true = remove mirror
     await webcam.setup();
     await webcam.play();
 
@@ -137,3 +137,4 @@ function sendCommand(label){
 
 </body>
 </html>
+
