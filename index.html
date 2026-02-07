@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Traffic Sign AI Robot</title>
+<title>Traffic Sign AI</title>
 
 <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.21.0"></script>
 <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@0.8/dist/teachablemachine-image.min.js"></script>
@@ -11,7 +11,13 @@
 body{
     text-align:center;
     font-family:Arial;
-    background:#f2f2f2;
+    background:#eeeeee;
+}
+
+button{
+    padding:12px;
+    font-size:20px;
+    margin-top:10px;
 }
 
 canvas{
@@ -19,15 +25,10 @@ canvas{
     margin-top:10px;
 }
 
-button{
-    font-size:20px;
-    padding:12px;
-}
-
 #label{
     font-size:26px;
-    color:green;
     font-weight:bold;
+    color:green;
     margin-top:10px;
 }
 </style>
@@ -35,7 +36,7 @@ button{
 
 <body>
 
-<h2>Traffic Sign Robot</h2>
+<h2>Traffic Sign Recognition</h2>
 
 <button onclick="init()">START CAMERA</button>
 
@@ -46,92 +47,111 @@ button{
 
 const URL = "https://teachablemachine.withgoogle.com/models/DXF2w_wXO/";
 
-let model, webcam, maxPredictions;
+let model, webcam;
 let lastCommand = "";
+
+const CONFIDENCE = 0.85;   // ⭐ Strong detection only
+const DELAY = 1500;       // ⭐ Prevent command spam
+
+//--------------------------------------------------
 
 async function init() {
 
-    const modelURL = URL + "model.json";
-    const metadataURL = URL + "metadata.json";
+    try{
 
-    model = await tmImage.load(modelURL, metadataURL);
+        const modelURL = URL + "model.json";
+        const metadataURL = URL + "metadata.json";
 
-    // ⭐ VERY IMPORTANT LINE
-    maxPredictions = model.getTotalClasses();
+        model = await tmImage.load(modelURL, metadataURL);
 
- webcam = new tmImage.Webcam(224,224,false); // NO MIRROR
+        // ⭐ REAR CAMERA + NO MIRROR
+        webcam = new tmImage.Webcam(224,224,false);
 
-await webcam.setup({
-   facingMode: "environment"
-});
+        await webcam.setup({
+            facingMode:"environment"
+        });
 
-await webcam.play();
+        await webcam.play();
 
-window.requestAnimationFrame(loop);
+        document.getElementById("webcam-container")
+                .appendChild(webcam.canvas);
 
+        window.requestAnimationFrame(loop);
+
+    }catch(err){
+
+        alert("Camera Error → Restart App\n" + err);
+        console.log(err);
+    }
 }
 
+//--------------------------------------------------
+
 async function loop(){
+
     webcam.update();
     await predict();
     window.requestAnimationFrame(loop);
 }
 
+//--------------------------------------------------
+
 async function predict(){
 
-    const prediction = await model.predict(webcam.canvas);
+    const predictions = await model.predict(webcam.canvas);
 
-    let highest = prediction[0];
+    predictions.sort((a,b)=>b.probability-a.probability);
 
-    for(let i=1;i<prediction.length;i++){
-        if(prediction[i].probability > highest.probability){
-            highest = prediction[i];
-        }
-    }
+    const top = predictions[0];
 
-    if(highest.probability > 0.85){
+    if(top.probability < CONFIDENCE) return;
 
-        const label = highest.className.trim();
+    let label = top.className.toUpperCase();
 
-        document.getElementById("label")
-        .innerText = "Prediction: " + label;
+    document.getElementById("label").innerText =
+        "Prediction: " + label +
+        " (" + Math.round(top.probability*100) + "%)";
 
-        sendCommand(label);
-    }
-}
-
-function sendCommand(label){
+    //--------------------------------------------------
+    // COMMAND MAP
+    //--------------------------------------------------
 
     let cmd = "";
 
-    const L = label.toUpperCase();
-
-    if(L.includes("STOP"))
+    if(label.includes("STOP"))
         cmd="S";
 
-    else if(L.includes("LEFT"))
+    else if(label.includes("LEFT"))
         cmd="L";
 
-    else if(L.includes("RIGHT"))
+    else if(label.includes("RIGHT"))
         cmd="R";
 
-    else if(L.includes("UTURN"))
+    else if(label.includes("UTURN"))
         cmd="U";
 
-    else if(L.includes("ROUND"))
+    else if(label.includes("ROUND"))
         cmd="A";
 
-    else
-        cmd="F";
+    else if(label.includes("NONE"))
+        return;
 
-    // prevent spam
+    //--------------------------------------------------
+
     if(cmd !== lastCommand){
 
         lastCommand = cmd;
 
+        console.log("Sending:",cmd);
+
+        // ⭐ SEND TO MIT APP INVENTOR
         if(window.AppInventor){
+
             window.AppInventor.setWebViewString(cmd);
         }
+
+        // ⭐ small delay to avoid flooding bluetooth
+        await new Promise(r=>setTimeout(r,DELAY));
     }
 }
 
@@ -139,6 +159,3 @@ function sendCommand(label){
 
 </body>
 </html>
-
-
-
