@@ -1,32 +1,33 @@
 <!DOCTYPE html>
 <html>
 <head>
-<meta charset="UTF-8">
-<title>Traffic Sign AI</title>
-
-<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.21.0"></script>
-<script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@0.8/dist/teachablemachine-image.min.js"></script>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest"></script>
+<script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@latest"></script>
 
 <style>
 body{
     text-align:center;
     font-family:Arial;
-    background:#eeeeee;
+    background:#f2f2f2;
+}
+
+video{
+    width:320px;
+    height:240px;
+    border:4px solid black;
+    border-radius:10px;
+    object-fit:cover;
 }
 
 button{
-    padding:12px;
-    font-size:20px;
-    margin-top:10px;
-}
-
-canvas{
-    border:4px solid black;
-    margin-top:10px;
+    padding:15px;
+    font-size:18px;
+    margin-top:15px;
 }
 
 #label{
-    font-size:26px;
+    font-size:28px;
     font-weight:bold;
     color:green;
     margin-top:10px;
@@ -36,127 +37,145 @@ canvas{
 
 <body>
 
-<h2>Traffic Sign Recognition</h2>
+<h2>Traffic Sign AI</h2>
 
-<button onclick="init()">START CAMERA</button>
+<button onclick="startCamera()">START CAMERA</button>
 
-<div id="webcam-container"></div>
+<br><br>
+
+<video id="video" autoplay playsinline></video>
+
 <div id="label">Prediction: NONE</div>
 
 <script>
 
-const URL = "https://teachablemachine.withgoogle.com/models/DXF2w_wXO/";
+let model, webcam, maxPredictions;
+const URL = "PASTE_YOUR_TEACHABLE_MACHINE_MODEL_LINK_HERE/"; 
+// example:
+// https://teachablemachine.withgoogle.com/models/XXXX/
 
-let model, webcam;
-let lastCommand = "";
+async function startCamera(){
 
-const CONFIDENCE = 0.85;   // ⭐ Strong detection only
-const DELAY = 1500;       // ⭐ Prevent command spam
+try{
 
-//--------------------------------------------------
+    const modelURL = URL + "model.json";
+    const metadataURL = URL + "metadata.json";
 
-async function init() {
+    model = await tmImage.load(modelURL, metadataURL);
+    maxPredictions = model.getTotalClasses();
 
-    try{
+    const stream = await navigator.mediaDevices.getUserMedia({
+        video:{
+            facingMode:{ exact:"environment" } // ⭐ rear camera
+        },
+        audio:false
+    });
 
-        const modelURL = URL + "model.json";
-        const metadataURL = URL + "metadata.json";
+    const video = document.getElementById("video");
+    video.srcObject = stream;
 
-        model = await tmImage.load(modelURL, metadataURL);
+    video.onloadedmetadata = () => {
+        predictLoop(video);
+    };
 
-        // ⭐ REAR CAMERA + NO MIRROR
-        webcam = new tmImage.Webcam(224,224,false);
+}catch(err){
 
-        await webcam.setup({
-            facingMode:"environment"
-        });
+    // fallback if exact rear cam not supported
+    const stream = await navigator.mediaDevices.getUserMedia({
+        video:{ facingMode:"environment" },
+        audio:false
+    });
 
-        await webcam.play();
+    const video = document.getElementById("video");
+    video.srcObject = stream;
 
-        document.getElementById("webcam-container")
-                .appendChild(webcam.canvas);
-
-        window.requestAnimationFrame(loop);
-
-    }catch(err){
-
-        alert("Camera Error → Restart App\n" + err);
-        console.log(err);
-    }
+    video.onloadedmetadata = () => {
+        predictLoop(video);
+    };
+}
 }
 
-//--------------------------------------------------
 
-async function loop(){
+async function predictLoop(video){
 
-    webcam.update();
-    await predict();
-    window.requestAnimationFrame(loop);
-}
+while(true){
 
-//--------------------------------------------------
+    const prediction = await model.predict(video);
 
-async function predict(){
+    let highestProb = 0;
+    let bestClass = "NONE";
 
-    const predictions = await model.predict(webcam.canvas);
+    for(let i=0;i<prediction.length;i++){
 
-    predictions.sort((a,b)=>b.probability-a.probability);
+        if(prediction[i].probability > highestProb){
 
-    const top = predictions[0];
-
-    if(top.probability < CONFIDENCE) return;
-
-    let label = top.className.toUpperCase();
-
-    document.getElementById("label").innerText =
-        "Prediction: " + label +
-        " (" + Math.round(top.probability*100) + "%)";
-
-    //--------------------------------------------------
-    // COMMAND MAP
-    //--------------------------------------------------
-
-    let cmd = "";
-
-    if(label.includes("STOP"))
-        cmd="S";
-
-    else if(label.includes("LEFT"))
-        cmd="L";
-
-    else if(label.includes("RIGHT"))
-        cmd="R";
-
-    else if(label.includes("UTURN"))
-        cmd="U";
-
-    else if(label.includes("ROUND"))
-        cmd="A";
-
-    else if(label.includes("NONE"))
-        return;
-
-    //--------------------------------------------------
-
-    if(cmd !== lastCommand){
-
-        lastCommand = cmd;
-
-        console.log("Sending:",cmd);
-
-        // ⭐ SEND TO MIT APP INVENTOR
-        if(window.AppInventor){
-
-            window.AppInventor.setWebViewString(cmd);
+            highestProb = prediction[i].probability;
+            bestClass = prediction[i].className;
         }
-
-        // ⭐ small delay to avoid flooding bluetooth
-        await new Promise(r=>setTimeout(r,DELAY));
     }
+
+    bestClass = bestClass.toUpperCase();
+
+    document.getElementById("label").innerHTML =
+        "Prediction: " + bestClass + " (" +
+        (highestProb*100).toFixed(0) + "%)";
+
+
+    // ⭐⭐⭐ CONFIDENCE FILTER (VERY IMPORTANT)
+    if(highestProb > 0.85){
+
+        sendCommand(bestClass);
+    }
+
+    await new Promise(r=>setTimeout(r,120)); // bluetooth safe speed
+}
+}
+
+
+
+function sendCommand(label){
+
+let cmd = "";
+
+// ⭐ MATCH YOUR TM CLASS NAMES EXACTLY
+if(label.includes("STOP"))
+    cmd="S";
+
+else if(label.includes("LEFT"))
+    cmd="L";
+
+else if(label.includes("RIGHT"))
+    cmd="R";
+
+else if(label.includes("UTURN"))
+    cmd="U";
+
+else if(label.includes("ROUND"))
+    cmd="A";
+
+else if(label.includes("FORWARD"))
+    cmd="F";
+
+else if(label.includes("REVERSE"))
+    cmd="B";
+
+else
+    cmd="N"; // NONE
+
+
+
+console.log("Sending:",cmd);
+
+
+// ⭐⭐⭐ SEND CONTINUOUSLY (NO lastCommand!)
+if(window.AppInventor){
+
+    window.AppInventor.setWebViewString(cmd);
+}
+
 }
 
 </script>
 
 </body>
 </html>
-
