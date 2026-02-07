@@ -59,17 +59,16 @@ async function init() {
     // ⭐ VERY IMPORTANT LINE
     maxPredictions = model.getTotalClasses();
 
-    webcam = new tmImage.Webcam(224,224,true); // true = remove mirror
-    await webcam.setup({
+ webcam = new tmImage.Webcam(224,224,false); // NO MIRROR
+
+await webcam.setup({
    facingMode: "environment"
 });
 
-    await webcam.play();
+await webcam.play();
 
-    document.getElementById("webcam-container")
-        .appendChild(webcam.canvas);
+window.requestAnimationFrame(loop);
 
-    window.requestAnimationFrame(loop);
 }
 
 async function loop(){
@@ -140,5 +139,6 @@ function sendCommand(label){
 
 </body>
 </html>
+
 
 
